@@ -962,6 +962,14 @@ func (s *Service) getManifestCacheEntry(cacheKey string, q *apiclient.ManifestRe
 }
 
 func getHelmRepos(appPath string, repositories []*v1alpha1.Repository, helmRepoCreds []*v1alpha1.RepoCreds) ([]helm.HelmRepository, error) {
+	if strings.Contains(appPath, "msc-tn-argo-debug") {
+		log.Infof("******MY_DEBUG_HIT******")
+		log.Infof("******MY_DEBUG_HIT******")
+		log.Infof("******MY_DEBUG_HIT******")
+		log.Infof("******MY_DEBUG_HIT******")
+		log.Infof("******MY_DEBUG_HIT******")
+	}
+
 	dependencies, err := getHelmDependencyRepos(appPath)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving helm dependency repos: %w", err)
@@ -979,13 +987,24 @@ func getHelmRepos(appPath string, repositories []*v1alpha1.Repository, helmRepoC
 	for _, dep := range dependencies {
 		// find matching repo credentials by URL or name
 		repo, ok := reposByUrl[dep.Repo]
+
+		if ok {
+			log.Infof("RepoCreds matched by repoURL. depName: %s", dep.Repo)
+		}
+
 		if !ok && dep.Name != "" {
 			repo, ok = reposByName[dep.Name]
 		}
+
+		if ok {
+			log.Infof("RepoCreds matched by repoName. depName: %s", dep.Name)
+		}
+
 		if !ok {
 			// if no matching repo credentials found, use the repo creds from the credential list
 			repo = &v1alpha1.Repository{Repo: dep.Repo, Name: dep.Name, EnableOCI: dep.EnableOCI}
 			if repositoryCredential := getRepoCredential(helmRepoCreds, dep.Repo); repositoryCredential != nil {
+				log.Infof("OCI Disable")
 				repo.EnableOCI = repositoryCredential.EnableOCI
 				repo.Password = repositoryCredential.Password
 				repo.Username = repositoryCredential.Username
@@ -993,19 +1012,36 @@ func getHelmRepos(appPath string, repositories []*v1alpha1.Repository, helmRepoC
 				repo.TLSClientCertData = repositoryCredential.TLSClientCertData
 				repo.TLSClientCertKey = repositoryCredential.TLSClientCertKey
 			} else if repo.EnableOCI {
+				log.Infof("OCI Enable")
 				// finally if repo is OCI and no credentials found, use the first OCI credential matching by hostname
 				// see https://github.com/argoproj/argo-cd/issues/14636
 				for _, cred := range repositories {
-					if depURL, err := url.Parse("oci://" + dep.Repo); err == nil && cred.EnableOCI && depURL.Host == cred.Repo {
+					depURL, err := url.Parse("oci://" + dep.Repo)
+					log.Infof("depName: %s, depRepo: %s, credEnableOCI: %s, depURLHost: %s, credRepo: %s", dep.Name, dep.Repo, cred.EnableOCI, depURL.Host, cred.Repo)
+					if err == nil && cred.EnableOCI && strings.Contains(dep.Repo, cred.Repo) {
+						log.Infof(depURL.Host)
 						repo.Username = cred.Username
 						repo.Password = cred.Password
 						break
+					} else {
+						log.Errorf("%v", err)
 					}
 				}
 			}
+
+			log.Infof("RepoCreds matched by complex. depName: %s, depRepo: %s", dep.Name, dep.Repo)
 		}
 		repos = append(repos, helm.HelmRepository{Name: repo.Name, Repo: repo.Repo, Creds: repo.GetHelmCreds(), EnableOci: repo.EnableOCI})
 	}
+
+	if strings.Contains(appPath, "msc-tn-argo-debug") {
+		log.Infof("******MY_DEBUG_END******")
+		log.Infof("******MY_DEBUG_END******")
+		log.Infof("******MY_DEBUG_END******")
+		log.Infof("******MY_DEBUG_END******")
+		log.Infof("******MY_DEBUG_END******")
+	}
+
 	return repos, nil
 }
 
@@ -1328,8 +1364,10 @@ func getRepoCredential(repoCredentials []*v1alpha1.RepoCreds, repoURL string) *v
 	for _, cred := range repoCredentials {
 		url := strings.TrimPrefix(repoURL, ociPrefix)
 		if strings.HasPrefix(url, cred.URL) {
+			log.Infof("RepoCreds matched with repoUrl. repoURL: %s, ociPrefix: %s, url: %s, credURL: %s", repoURL, ociPrefix, url, cred.URL)
 			return cred
 		}
+		log.Infof("RepoCreds not matched with repoUrl. repoURL: %s, ociPrefix: %s, url: %s, credURL: %s", repoURL, ociPrefix, url, cred.URL)
 	}
 	return nil
 }
